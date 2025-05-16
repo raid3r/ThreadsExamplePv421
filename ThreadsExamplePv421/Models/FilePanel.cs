@@ -38,35 +38,38 @@ public class FilePanel
     /// <param name="isActive"></param>
     public void Draw(bool isActive)
     {
-        Console.SetCursorPosition(startX, 0);
-
-        if (isActive)
+        lock (Console.Out)
         {
-            Console.BackgroundColor = ConsoleColor.Black;
-            Console.ForegroundColor = ConsoleColor.Green;
-        }
+            Console.SetCursorPosition(startX, 0);
 
-        if (currentDirectory.FullName.Length > maxWidth)
-            Console.WriteLine(currentDirectory.FullName.Substring(currentDirectory.FullName.Length - maxWidth));
-        else
-            Console.WriteLine(currentDirectory.FullName);
-
-        Console.ResetColor();
-
-        var items = GetPanelItems(currentDirectory);
-        for (int i = 0; i < items.Count; i++)
-        {
-            Console.SetCursorPosition(startX, i + 1);
-            // якщо елемент активний - виділяємо його
-            if (i == activeIndex && isActive)
+            if (isActive)
             {
-                Console.BackgroundColor = ConsoleColor.Yellow;
-                Console.ForegroundColor = ConsoleColor.Black;
+                Console.BackgroundColor = ConsoleColor.Black;
+                Console.ForegroundColor = ConsoleColor.Green;
             }
 
-            Console.WriteLine(items[i].Display);
+            if (currentDirectory.FullName.Length > maxWidth)
+                Console.WriteLine(currentDirectory.FullName.Substring(currentDirectory.FullName.Length - maxWidth));
+            else
+                Console.WriteLine(currentDirectory.FullName);
 
             Console.ResetColor();
+
+            var items = GetPanelItems(currentDirectory);
+            for (int i = 0; i < items.Count; i++)
+            {
+                Console.SetCursorPosition(startX, i + 1);
+                // якщо елемент активний - виділяємо його
+                if (i == activeIndex && isActive)
+                {
+                    Console.BackgroundColor = ConsoleColor.Yellow;
+                    Console.ForegroundColor = ConsoleColor.Black;
+                }
+
+                Console.WriteLine(items[i].Display);
+
+                Console.ResetColor();
+            }
         }
     }
 
@@ -123,6 +126,49 @@ public class FilePanel
 
             case ConsoleKey.D: // encrypt
                 HandleDecryptFile();
+                break;
+
+            case ConsoleKey.F1: // test
+                var taskPanel = new TaskInfoPanel()
+                {
+                    Title = "Encode files",
+                    Width = 31,
+                    Height = 8,
+                };
+                taskPanel.Draw();
+
+                var work = true;
+                var rand = new Random();
+
+                var threads = new List<Thread>();
+                for (int i = 0; i < 10; i++)
+                {
+                    threads.Add(new Thread(() =>
+                    {
+                        var progressBar = new ProgressBar() { Value = 0, startY = rand.Next(0, 20), startX = rand.Next(0, 50) };
+                        for (int i = 0; i < 100; i++)
+                        {
+                            if (!work)
+                            {
+                                progressBar.Clear();
+                                break;
+                            }
+
+                            progressBar.Value = i;
+                            progressBar.Draw();
+                            Thread.Sleep(rand.Next(100, 1000));
+                        }
+                    }));
+                }
+                threads.ForEach(t => t.Start());
+
+
+
+                Console.ReadKey(true);
+                work = false;
+
+                taskPanel.Clear();
+
                 break;
 
             default:
@@ -252,6 +298,7 @@ public class FilePanel
             {
                 aes.Key = Encoding.UTF8.GetBytes("12345678901234567890123456789012"); // 32 bytes key
                 aes.IV = Encoding.UTF8.GetBytes("1234567890123456"); // 16 bytes key
+
                 using (FileStream fs = new FileStream(selectedFileForDecrypt.FullName, FileMode.Open))
                 {
                     using (CryptoStream cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read))
@@ -266,32 +313,100 @@ public class FilePanel
         }
     }
 
+
+    private void Encrypt(FileInfo selectedFileForEncrypt)
+    {
+        // Тут можна додати код для шифрування файлу
+        using (Aes aes = Aes.Create())
+        {
+            aes.Key = Encoding.UTF8.GetBytes("12345678901234567890123456789012"); // 32 bytes key
+            aes.IV = Encoding.UTF8.GetBytes("1234567890123456"); // 16 bytes key
+                                                                 // text.txt => fsIn
+            using (FileStream fsIn = new FileStream(selectedFileForEncrypt.FullName, FileMode.Open))
+            {
+                using (CryptoStream cs = new CryptoStream(fsIn, aes.CreateEncryptor(), CryptoStreamMode.Read))
+                {
+                    // fsOut => text.txt.enc
+                    using (FileStream fsOut = new FileStream(selectedFileForEncrypt.FullName + ".enc", FileMode.Create))
+                    {
+                        // text.txt => fsIn => CryptoStream => aes.CreateEncryptor => fsOut => text.txt.enc
+                        cs.CopyTo(fsOut);
+                    }
+                }
+            }
+        }
+    }
+
     private void HandleEncryptFile()
     {
         var items = GetPanelItems(currentDirectory);
         var selectedFileForEncrypt = currentDirectory.GetFiles().FirstOrDefault(f => f.Name == items[activeIndex].Name);
 
-      
+        // file
         if (selectedFileForEncrypt != null)
         {
-           
-
-            // Тут можна додати код для шифрування файлу
-            using (Aes aes = Aes.Create())
-            {
-                aes.Key = Encoding.UTF8.GetBytes("12345678901234567890123456789012"); // 32 bytes key
-                aes.IV = Encoding.UTF8.GetBytes("1234567890123456"); // 16 bytes key
-                using (FileStream fs = new FileStream(selectedFileForEncrypt.FullName, FileMode.Open))
-                {
-                    using (CryptoStream cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Read))
-                    {
-                        using (FileStream fsOut = new FileStream(selectedFileForEncrypt.FullName + ".enc", FileMode.Create))
-                        {
-                            cs.CopyTo(fsOut);
-                        }
-                    }
-                }
-            }
+            Encrypt(selectedFileForEncrypt);
         }
+
+
+        // directory
+        var selectedDirForEncrypt = currentDirectory.GetDirectories().FirstOrDefault(d => d.Name == items[activeIndex].Name);
+        if (selectedDirForEncrypt != null)
+        {
+
+            var files = GetAllFiles(selectedDirForEncrypt).Where(x => !x.EndsWith(".enc"));
+            var queue = new Queue<string>(files);
+
+            var taskPanel = new TaskInfoPanel()
+            {
+                Title = "Encode files",
+                Width = 31,
+                Height = 8,
+            };
+            taskPanel.Draw();
+
+            var progressBar = new ProgressBar() { Value = 0, startY = 7, startX = 30 };
+            progressBar.Draw();
+
+            var filesCount = queue.Count;
+
+            Thread t = new Thread(() =>
+            {
+                //   [] [] [] [] [] [] [] => []
+
+                do
+                {
+                    var fileName = queue.Dequeue();
+                    Encrypt(new FileInfo(fileName));
+
+                    var value = (int)((float)(filesCount - queue.Count) / filesCount * 100);
+                    progressBar.Value = value;
+                    progressBar.Draw();
+
+                    Thread.Sleep(1000);
+
+                } while (queue.Count > 0);
+
+                progressBar.Clear();
+                taskPanel.Clear();
+            });
+
+            t.Start();
+            t.Join();
+        }
+    }
+
+    private List<string> GetAllFiles(DirectoryInfo directory)
+    {
+        List<string> list = new();
+        foreach (var d in directory.GetDirectories())
+        {
+            list.AddRange(GetAllFiles(d));
+        }
+        foreach (var f in directory.GetFiles())
+        {
+            list.Add(f.FullName);
+        }
+        return list;
     }
 }
