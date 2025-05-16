@@ -12,13 +12,21 @@ var rightPanel = new FilePanel(currentDirectory, 60);
 leftPanel.OtherPanel = rightPanel;
 rightPanel.OtherPanel = leftPanel;
 
-
 FilePanel activePanel = leftPanel;
+
+var visualElements = new List<IVisualElement>();
+leftPanel.VisualElements = visualElements;
+rightPanel.VisualElements = visualElements;
+
 
 while (true)
 {
     leftPanel.Draw(leftPanel == activePanel);
-    rightPanel.Draw(rightPanel == activePanel);  
+    rightPanel.Draw(rightPanel == activePanel);
+    lock (visualElements)
+    {
+        visualElements.ForEach(x => x.Draw());
+    }
 
     ConsoleKeyInfo key = Console.ReadKey(true);
 
