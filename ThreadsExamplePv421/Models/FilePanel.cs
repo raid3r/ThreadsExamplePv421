@@ -31,6 +31,7 @@ public class FilePanel
 
 
     public FilePanel OtherPanel { get; set; } = null!; // для копіювання файлів між панелями
+    public ICollection<IVisualElement> VisualElements { get; set; } = new List<IVisualElement>();
 
     /// <summary>
     /// Метод для відображення панелі
@@ -356,6 +357,7 @@ public class FilePanel
 
             var files = GetAllFiles(selectedDirForEncrypt).Where(x => !x.EndsWith(".enc"));
             var queue = new Queue<string>(files);
+           
 
             var taskPanel = new TaskInfoPanel()
             {
@@ -363,10 +365,13 @@ public class FilePanel
                 Width = 31,
                 Height = 8,
             };
-            taskPanel.Draw();
-
             var progressBar = new ProgressBar() { Value = 0, startY = 7, startX = 30 };
-            progressBar.Draw();
+
+            lock (VisualElements)
+            {
+                VisualElements.Add(taskPanel);
+                VisualElements.Add(progressBar);
+            }
 
             var filesCount = queue.Count;
 
@@ -389,10 +394,15 @@ public class FilePanel
 
                 progressBar.Clear();
                 taskPanel.Clear();
+                lock (VisualElements)
+                {
+                    VisualElements.Remove(progressBar);
+                    VisualElements.Remove(taskPanel);
+                }
+                
             });
 
             t.Start();
-            t.Join();
         }
     }
 

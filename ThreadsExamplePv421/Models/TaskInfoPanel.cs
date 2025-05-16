@@ -6,16 +6,15 @@ using System.Threading.Tasks;
 
 namespace ThreadsExamplePv421.Models;
 
-public class TaskInfoPanel
+public class TaskInfoPanel : IVisualElement
 {
+
     public int Width { get; set; } = 40;
     public int Height { get; set; } = 10;
     private int startX = 30;
     private int startY = 5;
 
     public string Title { get; set; } = string.Empty;
-
-    
 
     public void Clear()
     {
